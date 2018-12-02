@@ -136,7 +136,10 @@ def game_loop(components):
         while True:
             char = screen.getch()
             if char == ord("q") or char == 27:  # escape
-                break
+                screen.clear()
+                screen.addstr(10, 10, "Game exitte")
+                screen.refresh()
+                _time.sleep(2)
             elif char == _curses.KEY_LEFT:
                 world["moving_direction"] = "L"
             elif char == _curses.KEY_RIGHT:
@@ -150,11 +153,18 @@ def game_loop(components):
                 render(window, components)
                 last_rendered = _time.time()
 
-            if _time.time() >= (last_updated + update_interval):
-                update(world, components)
-                last_updated = _time.time()
+            try:
+                if _time.time() >= (last_updated + update_interval):
+                    update(world, components)
+                    last_updated = _time.time()
+            except GameOver:
+                screen.clear()
+                screen.addstr(10, 10, "Game Over")
+                screen.refresh()
+                _time.sleep(2)
+                break
 
-    print("\nGame exitted!")
+
 
 
 def release_the_snaken():
