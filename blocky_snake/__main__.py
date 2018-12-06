@@ -2,7 +2,7 @@
 
 import time as _time
 import contextlib as _ctx
-
+import random as _random
 import curses as _curses
 
 
@@ -17,8 +17,8 @@ update_interval = 100 / 1000.0
 
 world = {
     "moving_direction": "R",
-    "window": {"height": 10, "width": 20, "x": 0, "y": 0},
-    "cherry": {"pos": (10, 10)},
+    "window": {"height": 30, "width": 60, "x": 0, "y": 0},
+    "cherry": {"pos": None},
 }
 
 
@@ -37,13 +37,18 @@ def init_display(height, width, y, x):
 
 class Cherry:
     def __init__(self):
-        pass
+        self.pos = None
 
     def render(self, window, world):
-        pass
+        if self.pos:
+            window.addstr(self.pos[0], self.pos[1], "X")
 
     def update(self, world):
-        pass
+        if not world["cherry"]["pos"]:
+            w = world["window"]["width"]
+            h = world["window"]["height"]
+            self.pos = _random.randint(1, h - 1), _random.randint(1, w - 1)
+            world["cherry"]["pos"] = self.pos
 
 
 class Frame:
@@ -61,8 +66,6 @@ class Frame:
             window.addstr(0, x, "#")
             window.addstr(self.height + 1, x, "#")
 
-
-
     def update(self, world):
         pass
 
@@ -79,37 +82,65 @@ class Snake:
             else:
                 window.addstr(y, x, "=")
 
+    def _out_of_bounds_check(self, direction, world):
+        head = self.body[0]
+        if (
+            head[0] > world["window"]["height"]
+            or head[0] < 1
+            or head[1] > world["window"]["width"]
+            or head[1] < 1
+        ):
+            raise GameOver("Game Over")
+
+    def _snake_bites_itself_check(self):
+        if self.body[0] in self.body[1:]:
+            raise GameOver("Game Over")
+
+    def _invert_direction(self, current_direction):
+        if current_direction == "U":
+            direction = "D"
+        elif current_direction == "D":
+            direction = "U"
+        elif current_direction == "R":
+            direction = "L"
+        elif current_direction == "L":
+            direction = "R"
+        return direction
+
     def update(self, world):
         md = world["moving_direction"]
+
         last_pos = None
         for idx, part in enumerate(self.body):
             if idx == 0:
                 last_pos = part
                 if md == "D":
-                    if part[0] < world["window"]["height"]:
-                        self.body[0] = part[0] + 1, part[1]
-                    else:
-                        raise GameOver("Game Over")
+                    self.body[0] = part[0] + 1, part[1]
                 elif md == "U":
-                    if part[0] > 1:
-                        self.body[0] = part[0] - 1, part[1]
-                    else:
-                        raise GameOver("Game Over")
+                    self.body[0] = part[0] - 1, part[1]
                 elif md == "R":
-                    if part[1] < world["window"]["width"]:
-                        self.body[0] = part[0], part[1] + 1
-                    else:
-                        raise GameOver("Game Over")
+                    self.body[0] = part[0], part[1] + 1
                 elif md == "L":
-                    if part[1] > 1:
-                        self.body[0] = part[0], part[1] - 1
-                    else:
-                        raise GameOver("Game Over")
+                    self.body[0] = part[0], part[1] - 1
+                self._out_of_bounds_check(md, world)
+
+                if self.body[0] == self.body[1]:
+                    self.body[0] = last_pos
+                    world["moving_direction"] = self._invert_direction(md)
+                    self.update(world)
+
+                self._snake_bites_itself_check()
                 continue
 
             y, x = part
             self.body[idx] = last_pos
             last_pos = y, x
+
+        # Does the head has the same pos as the cherry?
+        # if so, erase cherry pos in world and grow snake
+        if self.body[0] == world["cherry"]["pos"]:
+            self.body.append(last_pos)
+            world["cherry"]["pos"] = None
 
 
 def render(window, components):
@@ -129,17 +160,21 @@ def game_loop(components):
     last_updated = _time.time()
 
     wincfg = world["window"]
-    with init_display(wincfg["height"] + 2 , wincfg["width"] + 2, wincfg["y"], wincfg["x"]) as (
-        screen,
-        window,
-    ):
+    with init_display(
+        wincfg["height"] + 2, wincfg["width"] + 2, wincfg["y"], wincfg["x"]
+    ) as (screen, window):
         while True:
             char = screen.getch()
             if char == ord("q") or char == 27:  # escape
                 screen.clear()
-                screen.addstr(10, 10, "Game exitte")
+                screen.addstr(
+                    world["window"]["height"] // 2,
+                    world["window"]["width"] // 2,
+                    "Game exitted!",
+                )
                 screen.refresh()
-                _time.sleep(2)
+                _time.sleep(1)
+                break
             elif char == _curses.KEY_LEFT:
                 world["moving_direction"] = "L"
             elif char == _curses.KEY_RIGHT:
@@ -159,12 +194,14 @@ def game_loop(components):
                     last_updated = _time.time()
             except GameOver:
                 screen.clear()
-                screen.addstr(10, 10, "Game Over")
+                screen.addstr(
+                    world["window"]["height"] // 2,
+                    world["window"]["width"] // 2,
+                    "Game Over!",
+                )
                 screen.refresh()
-                _time.sleep(2)
+                _time.sleep(1)
                 break
-
-
 
 
 def release_the_snaken():
@@ -177,11 +214,10 @@ def release_the_snaken():
                 world["window"]["width"],
                 world["window"]["y"],
                 world["window"]["x"],
-            )
+            ),
         ]
     )
 
 
 if __name__ == "__main__":
-    # print("foo")
     release_the_snaken()
