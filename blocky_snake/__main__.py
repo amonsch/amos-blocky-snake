@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 import time as _time
 import contextlib as _ctx
